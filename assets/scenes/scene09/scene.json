@@ -1,0 +1,28 @@
+{
+    "object_models": {
+        "volley_ball": {
+            "position": [0.1, -0.2, 0.18],
+            "scale": 0.3,
+            "cost": -1
+        },
+        "022_windex_bottle": {
+            "position": [0.1, 0.1, 0.05],
+            "scale": 1.3,
+            "cost": -1
+        },
+        "wine_glass": {
+            "position": [-0.05, 0.1, 0.05],
+            "orientation": [1.57, 0, 0],
+            "scale": 0.7,
+            "cost": -1
+        },
+        "061_foam_brick": {
+            "position": [-0.1, -0.05, 0.05],
+            "scale": 1.7,
+            "cost": -1
+        }
+    },
+    "target_object": "061_foam_brick",
+    "high_cost_object": ["wine_glass"]
+}
+  

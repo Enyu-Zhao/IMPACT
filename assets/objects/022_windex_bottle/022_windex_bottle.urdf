@@ -1,0 +1,33 @@
+<?xml version="1.0" ?>
+<robot name="022_windex_bottle">
+    <link name="baseLink">
+        <contact>
+        <friction_anchor/>
+        <lateral_friction value="1.5"/>
+        <rolling_friction value="0.1"/>
+        <spinning_friction value="0.1"/>
+        <contact_cfm value="1e-5"/>
+        <contact_erp value="0.8"/>
+        </contact>
+        <visual>
+            <origin rpy="0 0 0" xyz="0 0 0"/>
+            <geometry>
+                <mesh filename="assets/objects/022_windex_bottle/meshes/022_windex_bottle_textured.obj" scale="1 1 1"/>
+            </geometry>
+            <material name="white">
+                <color rgba="1 1 1 1"/>
+            </material>
+        </visual>
+        <collision>
+            <origin rpy="0 0 0" xyz="0 0 0"/>
+            <geometry>
+                <mesh filename="assets/objects/022_windex_bottle/meshes/022_windex_bottle_textured.obj" scale="1 1 1"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <origin rpy="0 0 0" xyz="0 0 0"/>
+            <mass value="1.0"/>
+            <inertia ixx="0.1" ixy="0" ixz="0" iyy="0.1" iyz="0" izz="0.1"/>
+        </inertial>
+    </link>
+</robot>

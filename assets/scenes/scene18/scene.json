@@ -1,0 +1,32 @@
+{
+  "object_models": {
+    "022_windex_bottle": {
+      "position":[0.1, 0.2, 0.05],
+      "scale": 1.5,
+      "cost": -1
+    },
+    "019_pitcher_base": {
+      "position": [0.2, -0.25, 0.05],
+      "orientation": [0, 0, -0.79],
+      "scale": 1.5,
+      "cost": -1
+    },
+    "006_mustard_bottle": {
+      "position": [0, 0.15, 0.05],
+      "scale": 1.5,
+      "cost": -1
+    },
+    "025_mug": {
+      "position": [-0.15, 0, 0.05],
+      "scale": 1.5,
+      "cost": -1
+    },
+    "008_pudding_box": {
+      "position": [0.15, 0, 0.05],
+      "scale": 1.5,
+      "cost": -1
+    }
+  },
+  "target_object": "025_mug",
+  "high_cost_object": ["019_pitcher_base", "022_windex_bottle"]
+}

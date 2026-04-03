@@ -1,0 +1,21 @@
+{
+    "object_models": {
+        "004_sugar_box": {
+            "position": [0.15, 0.15, 0.05],
+            "scale": 2,
+            "cost": -1
+        },
+        "006_mustard_bottle": {
+            "position": [0.15, -0.18, 0.05],
+            "scale": 2,
+            "cost": -1
+        },
+        "008_pudding_box": {
+            "position": [ -0.15, -0.15, 0.05],
+            "scale": 2,
+            "cost": -1
+        }
+    },
+    "target_object": "008_pudding_box",
+    "high_cost_object": []
+}

@@ -1,0 +1,38 @@
+<?xml version="1.0" ?>
+<sdf version="1.7">
+  <model name="table_top">
+    <link name="top_panel">
+      <pose>0 0 0.025 0 0 0</pose> <!-- Set the height of the table top to m -->
+      <visual name="top_visual">
+        <geometry>
+          <box>
+            <size>1.0 1.0 0.05</size> <!-- Table top size: 1m x 1m x 5cm -->
+          </box>
+        </geometry>
+        <material>
+          <diffuse>0.8 0.7 0.6 1.0</diffuse> <!-- Light brown color -->
+        </material>
+      </visual>
+      <collision name="top_collision">
+        <geometry>
+          <box>
+            <size>1.0 1.0 0.05</size> <!-- Table top collision box matching visual -->
+          </box>
+        </geometry>
+      </collision>
+      <!-- Inertial properties for the table top -->
+      <inertial>
+        <mass>10.0</mass> <!-- Adjust mass as needed -->
+        <inertia>
+          <ixx>0.083</ixx>
+          <ixy>0.0</ixy>
+          <ixz>0.0</ixz>
+          <iyy>0.083</iyy>
+          <iyz>0.0</iyz>
+          <izz>0.017</izz>
+        </inertia>
+        <pose>0 0 0.025 0 0 0</pose> <!-- Inertia located at the center of the object -->
+      </inertial>
+    </link>
+  </model>
+</sdf>

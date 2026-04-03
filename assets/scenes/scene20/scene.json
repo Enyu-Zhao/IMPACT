@@ -1,0 +1,35 @@
+{
+"object_models": {
+    "books": {
+        "position": [0.1, -0.2, 0.05],
+        "orientation": [1.57, 0, 1.57],
+        "scale": 0.3,
+        "cost": -1
+    },
+    "025_mug": {
+        "position": [0.1, -0.22, 0.15],
+        "scale": 1.3,
+        "cost": -1
+    },
+    "wine_glass": {
+        "position": [0.1, 0.12, 0.05],
+        "orientation": [1.57, 0, 0],
+        "scale": 0.8,
+        "cost": -1
+    },
+    "065-f_cups": {
+        "position": [-0.1, -0.05, 0.05],
+        "scale": 1.7,
+        "cost": -1
+    },
+    "glass_bottle": {
+        "position": [-0.1, 0.15, 0.05],
+        "orientation": [1.57, 0, 0],
+        "scale": 1.2,
+        "cost": -1
+    }
+},
+"target_object": "065-f_cups",
+"high_cost_object": ["wine_glass", "glass_bottle"]
+}
+  

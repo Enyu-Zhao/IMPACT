@@ -1,0 +1,28 @@
+{
+    "object_models": {
+        "volley_ball": {
+            "position": [0.1, -0.18, 0.18],
+            "scale": 0.3,
+            "cost": -1
+        },
+        "004_sugar_box": {
+            "position": [0.2, 0.15, 0.05],
+            "scale": 1.3,
+            "cost": -1
+        },
+        "wine_glass": {
+            "position": [-0.05, 0.25, 0.05],
+            "orientation": [1.57, 0, 0],
+            "scale": 0.7,
+            "cost": -1
+        },
+        "025_mug": {
+            "position": [-0.1, 0.05, 0.05],
+            "scale": 1.7,
+            "cost": -1
+        }
+    },
+    "target_object": "025_mug",
+    "high_cost_object": ["wine_glass"]
+}
+  

@@ -1,0 +1,34 @@
+{
+    "object_models": {
+        "025_mug": {
+            "position": [-0.05, -0.07, 0.05],
+            "scale": 1.6,
+            "cost": -1
+        },
+        "004_sugar_box": {
+            "position": [0.05, 0.2, 0.05],
+            "scale": 1.4,
+            "cost": -1
+        },
+        "coke_bottle": {
+            "position": [0.25, -0.25, 0.05],
+            "orientation": [1.57, 0, 1.57],
+            "scale": 0.35,
+            "cost": -1
+        },
+        "019_pitcher_base": {
+            "position": [0.2, -0.11, 0.05],
+            "orientation": [0, 0, -0.79],
+            "scale": 1,
+            "cost": -1
+        },
+        "stacked_bowls": {
+            "position": [0.225, 0.28, 0.05],
+            "scale": 0.35,
+            "cost": -1
+        }
+    },
+    "target_object": "025_mug",
+    "high_cost_object": ["stacked_bowls"]
+}
+  

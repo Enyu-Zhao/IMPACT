@@ -1,0 +1,4 @@
+newmtl material_0
+# shader_type beckmann
+map_Kd 022_windex_bottle_textured.png 
+

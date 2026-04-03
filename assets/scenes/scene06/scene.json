@@ -1,0 +1,34 @@
+{
+    "object_models": {
+        "books": {
+            "position": [0.08, -0.13, 0.10],
+            "scale": 0.27,
+            "cost": -1
+        },
+        "029_plate": {
+            "position": [0.08, -0.13, 0.16],
+            "scale": 0.6,
+            "cost": -1
+        },
+        "books2": {
+            "position": [0.15, 0.17, 0.14],
+            "orientation": [1.57, 0, 1.57],
+            "scale": 0.27,
+            "cost": -1
+        },
+        "soft_toy": {
+            "position": [0.11, 0.17, 0.165],
+            "orientation": [1.57, 0, 1.57],
+            "scale": 0.16,
+            "cost": -1
+        },
+        "004_sugar_box": {
+            "position": [-0.1, 0.1, 0.05],
+            "scale": 1.5,
+            "cost": -1
+        }
+    },
+    "target_object": "004_sugar_box",
+    "high_cost_object": ["029_plate"]
+}
+  

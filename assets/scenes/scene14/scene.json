@@ -1,0 +1,43 @@
+{
+    "object_models": {
+        "065-f_cups": {
+            "position": [-0.12, 0, 0.05],
+            "scale": 1.5,
+            "cost": -1
+        },
+        "bowl": {
+            "position": [0, -0.14, 0.05],
+            "orientation": [1.57, 0, 0],
+            "scale": 0.25,
+            "cost": -1
+        },
+        "wine_glass": {
+            "position": [-0.08, 0.2, 0.05],
+            "orientation": [1.57, 0, 0],
+            "scale": 0.7,
+            "cost": -1
+        },
+        "065-g_cups": {
+            "position": [0.14, 0.13, 0.05],
+            "scale": 1.5,
+            "cost": -1
+        },
+        "065-h_cups": {
+            "position": [0.22, 0.35, 0.05],
+            "scale": 1.5,
+            "cost": -1
+        },
+        "004_sugar_box": {
+            "position": [0.25,-0.23, 0.05],
+            "scale": 1.2,
+            "cost": -1
+        },
+        "022_windex_bottle": {
+            "position": [0.27, -0.1, 0.02],
+            "scale": 1.2,
+            "cost": -1
+        }
+    },
+    "target_object": "065-f_cups",
+    "high_cost_object": ["bowl", "wine_glass"]
+}

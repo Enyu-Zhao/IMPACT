@@ -1,0 +1,34 @@
+{
+    "object_models": {
+        "056_tennis_ball": {
+            "position": [-0.1, 0, 0.05],
+            "scale": 1.5,
+            "cost": -1
+        },
+        "007_tuna_fish_can": {
+            "position": [0.175, 0.105, 0.05],
+            "scale": 1,
+            "cost": -1
+        },
+        "004_sugar_box": {
+            "position": [0.2, -0.22, 0.05],
+            "scale": 1.4,
+            "cost": -1
+        },
+        "019_pitcher_base": {
+            "position": [0.15, -0.13, 0.05],
+            "orientation": [0, 0, -0.79],
+            "scale": 1,
+            "cost": -1
+        },
+        "coke_bottle": {
+            "position": [0.025, 0.2, 0.05],
+            "orientation": [1.57, 0, 1.57],
+            "scale": 0.35,
+            "cost": -1
+        }
+    },
+    "target_object": "056_tennis_ball",
+    "high_cost_object": ["019_pitcher_base"]
+}
+  

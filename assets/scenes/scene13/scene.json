@@ -1,0 +1,39 @@
+{
+    "object_models": {
+        "008_pudding_box": {
+            "position": [0.02, -0.25, 0.05],
+            "scale": 1.6,
+            "cost": -1
+        },
+        "wine_glass": {
+            "position": [-0.1, 0, 0.05],
+            "orientation": [1.57, 0, 0],
+            "scale": 0.7,
+            "cost": -1
+        },
+        "070-a_colored_wood_blocks": {
+            "position": [0.175, 0.28, 0.05],
+            "scale": 1,
+            "cost": -1
+        },
+        "004_sugar_box": {
+            "position": [0, 0.2, 0.05],
+            "scale": 1.4,
+            "cost": -1
+        },
+        "019_pitcher_base": {
+            "position": [0.14, -0.02, 0.05],
+            "orientation": [0, 0, -0.79],
+            "scale": 1,
+            "cost": -1
+        },
+        "006_mustard_bottle": {
+            "position":[0.2, -0.22, 0.05],
+            "scale": 1.5,
+            "cost": -1
+        }
+    },
+    "target_object": "008_pudding_box",
+    "high_cost_object": ["wine_glass"]
+}
+  

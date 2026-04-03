@@ -1,0 +1,39 @@
+{
+  "object_models": {
+      "065-f_cups": {
+        "position": [-0.12, 0.22, 0.05],
+        "scale": 1.6,
+        "cost": -1
+      },
+      "006_mustard_bottle": {
+        "position": [0.1, 0.17, 0.05],
+        "scale": 1.5,
+        "cost": -1
+      },
+      "070-a_colored_wood_blocks": {
+        "position": [0.05, 0.32, 0.05],
+        "scale": 1,
+        "cost": -1
+      },
+      "glass_bottle": {
+        "position": [0, 0, 0.05],
+        "orientation": [1.57, 0, 0],
+        "scale": 1,
+        "cost": -1
+      },
+      "004_sugar_box": {
+        "position": [-0.1, -0.15, 0.05],
+        "scale": 1.4,
+        "cost": -1
+      },
+      "019_pitcher_base": {
+        "position": [0.2, -0.3, 0.05],
+        "orientation": [0, 0, -0.79],
+        "scale": 1.2,
+        "cost": -1
+      }
+  },
+  "target_object": "065-f_cups",
+  "high_cost_object": ["glass_bottle"]
+}
+  

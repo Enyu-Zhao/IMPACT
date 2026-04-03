@@ -1,0 +1,23 @@
+{
+    "object_models": {
+        "bowl": {
+            "position": [-0.04, -0.2, 0.07],
+            "orientation": [1.57, 0, 0],
+            "scale": 0.25,
+            "cost": -1
+        },
+        "stacked_bowls": {
+            "position": [0.15, 0.17, 0.13],
+            "scale": 0.33,
+            "cost": -1
+        },
+        "004_sugar_box": {
+            "position": [-0.1, 0.03, 0.05],
+            "scale": 1.5,
+            "cost": -1
+        }
+    },
+    "target_object": "004_sugar_box",
+    "high_cost_object": ["stacked_bowls", "bowl"]
+}
+  

@@ -1,0 +1,28 @@
+{
+    "object_models": {
+      "glass_bottle": {
+        "position": [0.1, 0.15, 0.05],
+        "orientation": [1.57, 0, 0],
+        "scale": 1.3,
+        "cost": -1
+      },
+      "035_power_drill": {
+        "position": [0.23, -0.15, 0.05],
+        "scale": 1.2,
+        "cost": -1
+      },
+      "022_windex_bottle": {
+        "position": [0.0, -0.15, 0.05],
+        "scale": 1.4,
+        "cost": -1
+      },
+      "070-a_colored_wood_blocks": {
+        "position": [-0.15, 0.0, 0.05],
+        "scale": 1,
+        "cost": -1
+      }
+    },
+    "target_object": "070-a_colored_wood_blocks",
+    "high_cost_object": ["glass_bottle"]
+  }
+  
