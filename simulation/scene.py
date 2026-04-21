@@ -5,7 +5,7 @@ import numpy as np
 
 from simulation.cameras import Camera
 from simulation.image_set import ImageSet
-from simulation.cost_map import CostMap, fetch_cost_dict
+from simulation.cost_map import CostMap, fetch_cost_dict_bypass
 
 
 class SceneObject:
@@ -227,7 +227,11 @@ class Scene:
             if show_annotated:
                 image_set.show("annotated")
 
-        self.cost_dict = fetch_cost_dict(image_set=self.front_camera_image_set)
+        # self.cost_dict = fetch_cost_dict(image_set=self.front_camera_image_set)
+        self.cost_dict = fetch_cost_dict_bypass(image_set=self.front_camera_image_set)
+        print(f"[INFO]: cost_dict: {self.cost_dict}")
+
+        self.cost_dict={2:2, 3:8, 4:6}
         self.get_target_object_info(target_object_name)
         self.update_scene_objects(scene_file)
         self.cost_dict[self.target_id] = -1 

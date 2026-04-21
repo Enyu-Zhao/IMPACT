@@ -229,6 +229,13 @@ Your analysis should be comprehensive, considering the dynamic interactions betw
     return prompt
 
 
+def fetch_cost_dict_bypass(image_set):
+    # Mock: assign a neutral safety score of 5 to all objects (bypasses OpenAI API)
+    cost_dict = {i + 2: 5 for i in image_set.scene_objects}
+    print(f"Mock cost_dict: {cost_dict}")
+    return cost_dict
+
+
 def fetch_cost_dict(image_set):
     model = "gpt-4o" 
     buffered = io.BytesIO()
