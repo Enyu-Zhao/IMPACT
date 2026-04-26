@@ -2,7 +2,6 @@ import pybullet as p
 import json
 import os
 import argparse
-import numpy as np
 
 from simulation.scene import Scene
 from simulation.grasp_utils import (load_grasps, grasps_to_world,
@@ -14,7 +13,7 @@ from planning.a_star import AStar
 from planning.a_star_no_dir import PlainAStar
 from planning.sample_pushing import analyze_push_safety, process_voxel_scene
 from planning.bi_rrt import plan_bi_rrt
-from planning.rrt_utils_config import is_valid_config
+from planning.rrt_utils_config import generate_valid_ik_goals
 
 
 def find_path(scene_name, algo, cost_map, start_position, target_position,
@@ -48,45 +47,14 @@ def find_path(scene_name, algo, cost_map, start_position, target_position,
     return path, cost
 
 
-_ARM_DOF = 7
-_IK_GOAL_TOLERANCE = 0.01
-
-def find_path_bi_rrt(robot, ee_link_index, target_position, cost_dict, target_id=None):
-    rng = np.random.default_rng(seed=0)
-    q_init = [p.getJointState(robot, i)[0] for i in range(_ARM_DOF)]
-    lower = np.array([p.getJointInfo(robot, i)[8] for i in range(_ARM_DOF)])
-    upper = np.array([p.getJointInfo(robot, i)[9] for i in range(_ARM_DOF)])
-    joint_ranges = upper - lower
-    goals = []
-    attempts = 0
-    while len(goals) < 20 and attempts < 200:
-        attempts += 1
-        q_rand = rng.uniform(lower, upper)
-        for i, pos in enumerate(q_rand):
-            p.resetJointState(robot, i, pos)
-        q_ik = np.array(p.calculateInverseKinematics(
-            robot, ee_link_index, target_position,
-            lowerLimits=lower.tolist(),
-            upperLimits=upper.tolist(),
-            jointRanges=joint_ranges.tolist(),
-            restPoses=q_rand,
-            maxNumIterations=300,
-            residualThreshold=1e-4,
-        ))[:_ARM_DOF]
-        if np.any(q_ik < lower) or np.any(q_ik > upper):
-            continue
-        for i, pos in enumerate(q_ik):
-            p.resetJointState(robot, i, pos)
-        ee_pos = np.array(p.getLinkState(robot, ee_link_index)[4])
-        if np.linalg.norm(ee_pos - np.array(target_position)) > _IK_GOAL_TOLERANCE:
-            continue
-        if not is_valid_config(robot, q_ik, cost_dict=cost_dict, ignored_body_ids=[target_id], ignored_robot_link_ids=[-1]):
-            continue
-        goals.append(q_ik)
-    for i, pos in enumerate(q_init):
-        p.resetJointState(robot, i, pos)
+def find_path_bi_rrt(robot, ee_link_index, target_position, cost_dict, target_id=None, cost_map=None, max_cost=9, whole_robot=True, use_all_occupied_voxels=True):
+    q_init = [p.getJointState(robot, i)[0] for i in range(7)]
+    voxel_grid = None if cost_map is None else cost_map.voxel_grid
+    voxel_size = None if cost_map is None else cost_map.voxel_size
+    origin = None if cost_map is None else cost_map.origin
+    goals, attempts = generate_valid_ik_goals(robot, ee_link_index, target_position, cost_dict=cost_dict, target_id=target_id, max_cost=max_cost, voxel_grid=voxel_grid, voxel_size=voxel_size, origin=origin, whole_robot=whole_robot, use_all_occupied_voxels=use_all_occupied_voxels)
     print(f"[INFO] generated {len(goals)} valid IK goals from {attempts} attempts")
-    path = plan_bi_rrt(robot, goals, cost_dict, target_id=target_id, seed=42)
+    path = plan_bi_rrt(robot, goals, cost_dict, target_id=target_id, seed=42, max_cost=max_cost, cost_map=cost_map, ee_link_index=ee_link_index, whole_robot=whole_robot, use_all_occupied_voxels=use_all_occupied_voxels)
     for i, pos in enumerate(q_init):
         p.resetJointState(robot, i, pos)
     if path is not None:
@@ -115,7 +83,7 @@ def main(args):
     robot, ee_link_index = scene.load_robot()
 
     if args.algo == 'bi_rrt':
-        path = find_path_bi_rrt(robot, ee_link_index, scene.target_position, scene.cost_dict, target_id=scene.target_id)
+        path = find_path_bi_rrt(robot, ee_link_index, scene.target_position, scene.cost_dict, target_id=scene.target_id, cost_map=cost_map)
         cost = 0
     else:
         initial_end_effector_position = p.getLinkState(robot, ee_link_index)[4]

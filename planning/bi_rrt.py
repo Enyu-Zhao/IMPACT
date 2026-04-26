@@ -117,7 +117,7 @@ def _combine_paths(
         path_start.pop()
     return path_start + path_end
 
-def plan_bi_rrt(robot, goal_arm_configs, cost_dict=None, target_id=None, seed: int | None = None, epsilon=0.05, goal_biasing_probability=0.05, max_iters=5000, max_cost: float = _MAX_CONTACT_COST, ignored_robot_link_ids=None, cost_map=None, ee_link_index=None, voxel_grid=None, voxel_size=None, origin=None, whole_robot: bool = False, use_all_occupied_voxels: bool = False) -> list[np.ndarray] | None:
+def plan_bi_rrt(robot, goal_arm_configs, cost_dict=None, target_id=None, seed: int | None = None, epsilon=0.05, goal_biasing_probability=0.05, max_iters=5000, max_cost: float = _MAX_CONTACT_COST, ignored_robot_link_ids=None, cost_map=None, ee_link_index=None, voxel_grid=None, voxel_size=None, origin=None, whole_robot: bool = True, use_all_occupied_voxels: bool = True) -> list[np.ndarray] | None:
 
     # cost_dict maps PyBullet body IDs to GPT safety scores (0-10, or -1 for target).
     # It is used to decide which contacts are permissible. When None, any

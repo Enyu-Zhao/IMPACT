@@ -3,13 +3,13 @@ import sys
 from simulation.scene import Scene
 import json
 from planning.bi_rrt import plan_bi_rrt, set_arm_config
-from planning.rrt_utils_config import is_valid_config
-import numpy as np
+from planning.rrt_utils_config import generate_valid_ik_goals
 import pybullet as p
 import time
 
 _SCENE = "scene01"
 _GUI = True
+_MAX_COST = 9
 
 if __name__ == "__main__":
     scene_file = f"assets/scenes/{_SCENE}/scene.json"
@@ -26,46 +26,13 @@ if __name__ == "__main__":
 
     robot, ee_link_index = scene.load_robot()
 
-    _PANDA_LOWER = [-2.8973, -1.7628, -2.8973, -3.0718, -2.8973,  0.0,    -2.8973]
-    _PANDA_UPPER = [ 2.8973,  1.7628,  2.8973, -0.0698,  2.8973,  3.7525,  2.8973]
-    _PANDA_RANGE = [upper - lower for lower, upper in zip(_PANDA_LOWER, _PANDA_UPPER)]
-    _IK_GOAL_TOLERANCE = 0.01
-
-    rng = np.random.default_rng(seed=0)
     q_init = [p.getJointState(robot, i)[0] for i in range(7)]
-    lower, upper = np.array(_PANDA_LOWER), np.array(_PANDA_UPPER)
-    goals = []
-    attempts = 0
-    while len(goals) < 20 and attempts < 200:
-        attempts += 1
-        q_rand = rng.uniform(_PANDA_LOWER, _PANDA_UPPER)
-        for i, pos in enumerate(q_rand):
-            p.resetJointState(robot, i, pos)
-        q_ik = list(p.calculateInverseKinematics(
-            robot, ee_link_index, scene.target_position,
-            lowerLimits=_PANDA_LOWER,
-            upperLimits=_PANDA_UPPER,
-            jointRanges=_PANDA_RANGE,
-            restPoses=q_rand,
-            maxNumIterations=300,
-            residualThreshold=1e-4,
-        ))[:7]
-        q_ik = np.array(q_ik)
-        if np.any(q_ik < lower) or np.any(q_ik > upper):
-            continue
-        for i, pos in enumerate(q_ik):
-            p.resetJointState(robot, i, pos)
-        ee_pos = np.array(p.getLinkState(robot, ee_link_index)[4])
-        if np.linalg.norm(ee_pos - np.array(scene.target_position)) > _IK_GOAL_TOLERANCE:
-            continue
-        if not is_valid_config(robot, q_ik, cost_dict=cost_dict, ignored_body_ids=[scene.target_id], ignored_robot_link_ids=[-1]):
-            continue
-        goals.append(np.array(q_ik))
+    goals, attempts = generate_valid_ik_goals(robot, ee_link_index, scene.target_position, cost_dict=cost_dict, target_id=scene.target_id, max_cost=_MAX_COST, voxel_grid=cost_map.voxel_grid, voxel_size=cost_map.voxel_size, origin=cost_map.origin, whole_robot=True, use_all_occupied_voxels=True)
     for i, pos in enumerate(q_init):
         p.resetJointState(robot, i, pos)
     print(f"[INFO] generated {len(goals)} valid IK goals from {attempts} attempts")
 
-    plan = plan_bi_rrt(robot, goals, cost_dict=cost_dict, target_id=scene.target_id, seed=42)
+    plan = plan_bi_rrt(robot, goals, cost_dict=cost_dict, target_id=scene.target_id, seed=42, max_cost=_MAX_COST, cost_map=cost_map, ee_link_index=ee_link_index, whole_robot=True, use_all_occupied_voxels=True)
 
     if plan is None:
         print("planning failed")
