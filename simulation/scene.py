@@ -234,8 +234,9 @@ class Scene:
         self.cost_dict={2:2, 3:8, 4:6}
         self.get_target_object_info(target_object_name)
         self.update_scene_objects(scene_file)
-        self.cost_dict[self.target_id] = -1 
-        self.cost_dict[self.base_id] = 10 
+        self.cost_dict[self.target_id] = -1
+        self.cost_dict[self.base_id] = 10
+        self.cost_dict[self.plane_id] = 10
 
         cost_map = CostMap(self.name, image_sets=image_sets, cost_dict=self.cost_dict)
         return cost_map
@@ -244,6 +245,7 @@ class Scene:
     def load_cost_map(self, target_object_name=None):
         self.cost_dict = {obj.id: obj.cost for obj in self.scene_objects}
         self.get_target_object_info(target_object_name)
-        self.cost_dict[self.target_id] = 0 
-        self.cost_dict[self.base_id] = 10 
+        self.cost_dict[self.target_id] = 0
+        self.cost_dict[self.base_id] = 10
+        self.cost_dict[self.plane_id] = 10
 

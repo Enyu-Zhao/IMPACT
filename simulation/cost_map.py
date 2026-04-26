@@ -231,7 +231,7 @@ Your analysis should be comprehensive, considering the dynamic interactions betw
 
 def fetch_cost_dict_bypass(image_set):
     # Mock: assign a neutral safety score of 5 to all objects (bypasses OpenAI API)
-    cost_dict = {i + 2: 5 for i in image_set.scene_objects}
+    cost_dict = {i + 2: 3+i*2 for i in image_set.scene_objects}
     print(f"Mock cost_dict: {cost_dict}")
     return cost_dict
 

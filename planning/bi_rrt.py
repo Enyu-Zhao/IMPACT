@@ -1,8 +1,14 @@
 from planning.tree import Node, Tree
+from planning.rrt_utils_config import is_valid_config
 import pybullet as p
 import numpy as np
 
 _ARM_DOF = 7
+_BASE_LINK_INDEX = -1
+# Objects with a voxel cost above this threshold are treated as hard obstacles.
+# Lower-cost objects can be contacted (pushed through) during planning.
+_MAX_CONTACT_COST = 9
+
 
 def _get_joint_limits(robot) -> tuple[list[float], list[float]]:
     lower = []
@@ -20,7 +26,7 @@ def set_arm_config(robot, arm_config) -> None:
 def _contact_points(robot):
     """returns a list of contact points for the robot. Empty list means robot is collision free."""
     p.performCollisionDetection()
-    return p.getContactPoints(robot)
+    return p.getContactPoints(bodyA=robot)
 
 def _get_current_arm_config(robot) -> np.ndarray:
     arm_joint_states = p.getJointStates(robot, list(range(_ARM_DOF)))
@@ -63,17 +69,27 @@ def _step(start: np.ndarray, target: np.ndarray, max_step_dist: float) -> np.nda
     unit_vec = direction / magnitude
     return start + (unit_vec * min(max_step_dist, magnitude))
 
-def _connect(q_target, tree, epsilon, robot) -> np.ndarray:
-    closest_node = tree.nearest_neighbor(q_target)
+def _connect(q_target, tree, epsilon, robot, *, cost_dict=None, max_contact_cost: float = _MAX_CONTACT_COST, ignored_body_ids=None, ignored_robot_link_ids=None, weights=None, ee_link_index=None, voxel_grid=None, voxel_size=None, origin=None, max_voxel_cost=None, whole_robot: bool = False) -> np.ndarray:
+    closest_node = tree.nearest_neighbor(q_target, weights)
     q = closest_node.q
     while True:
         if np.array_equal(q, q_target):
-            # reached the target
             return q
         q_next = _step(q, q_target, epsilon)
-        set_arm_config(robot, q_next)
-        if _contact_points(robot):
-            # in collision, so return the previous (valid) config
+        if not is_valid_config(
+            robot,
+            q_next,
+            cost_dict=cost_dict,
+            max_contact_cost=max_contact_cost,
+            ignored_body_ids=ignored_body_ids,
+            ignored_robot_link_ids=ignored_robot_link_ids,
+            ee_link_index=ee_link_index,
+            voxel_grid=voxel_grid,
+            voxel_size=voxel_size,
+            origin=origin,
+            max_voxel_cost=max_voxel_cost,
+            whole_robot=whole_robot,
+        ):
             return q
         closest_node = Node(q_next, closest_node)
         tree.add_node(closest_node)
@@ -111,14 +127,56 @@ def _combine_paths(
         path_start.pop()
     return path_start + path_end
 
-def plan_bi_rrt(robot, goal_arm_configs, seed: int | None = None, epsilon = 0.05, goal_biasing_probability = 0.05, max_iters=5000) -> list[np.ndarray]:
+def plan_bi_rrt(robot, goal_arm_configs, cost_dict=None, target_id=None, seed: int | None = None, epsilon=0.05, goal_biasing_probability=0.05, max_iters=5000, max_contact_cost: float = _MAX_CONTACT_COST, ignored_robot_link_ids=None, cost_map=None, ee_link_index=None, voxel_grid=None, voxel_size=None, origin=None, max_voxel_cost=None, whole_robot: bool = False) -> list[np.ndarray] | None:
+
+    # cost_dict maps PyBullet body IDs to GPT safety scores (0-10, or -1 for target).
+    # It is used to decide which contacts are permissible. When None, any
+    # non-ignored contact blocks extension.
     q_init = _get_current_arm_config(robot)
-
-    for q_goal in goal_arm_configs:
-        set_arm_config(robot, q_goal)
-        assert not _contact_points(robot), f"goal config {q_goal} is in collision"
-
+    ignored_body_ids = [] if target_id is None else [target_id]
+    ignored_robot_link_ids = [_BASE_LINK_INDEX] if ignored_robot_link_ids is None else ignored_robot_link_ids
     joint_limits = _get_joint_limits(robot)
+    lower, upper = np.array(joint_limits[0]), np.array(joint_limits[1])
+    # Normalise distance metric by joint range so no single joint dominates.
+    joint_ranges = np.where(upper > lower, upper - lower, 1.0)
+    joint_weights = 1.0 / joint_ranges
+
+    if cost_map is not None:
+        voxel_grid = cost_map.voxel_grid
+        voxel_size = cost_map.voxel_size
+        origin = cost_map.origin
+    if voxel_grid is not None and max_voxel_cost is None:
+        max_voxel_cost = max_contact_cost
+
+    validity_kwargs = dict(
+        cost_dict=cost_dict,
+        max_contact_cost=max_contact_cost,
+        ignored_body_ids=ignored_body_ids,
+        ignored_robot_link_ids=ignored_robot_link_ids,
+        ee_link_index=ee_link_index,
+        voxel_grid=voxel_grid,
+        voxel_size=voxel_size,
+        origin=origin,
+        max_voxel_cost=max_voxel_cost,
+        whole_robot=whole_robot,
+    )
+
+    valid_goal_configs = []
+    for q_goal in goal_arm_configs:
+        q_goal = np.asarray(q_goal, dtype=float)
+        if np.any(q_goal < lower) or np.any(q_goal > upper):
+            print(f"[WARN] skipping goal config outside joint limits: {q_goal}")
+            continue
+        if not is_valid_config(robot, q_goal, **validity_kwargs):
+            print(f"[WARN] skipping invalid goal config: {q_goal}")
+            continue
+        valid_goal_configs.append(q_goal)
+
+    if not valid_goal_configs:
+        print("[ERROR] no valid goal configs found")
+        set_arm_config(robot, q_init)
+        return None
+    goal_arm_configs = valid_goal_configs
 
     start_tree = Tree(Node(q_init))
     # To support multiple goals, the root of the goal tree is a sink node and all
@@ -147,18 +205,22 @@ def plan_bi_rrt(robot, goal_arm_configs, seed: int | None = None, epsilon = 0.05
             # sample a random config
             q_rand = rng.uniform(joint_limits[0], joint_limits[1])
 
-        q_reached_a = _connect(q_rand, tree_a, epsilon, robot)
-        q_reached_b = _connect(q_reached_a, tree_b, epsilon, robot)
+        q_reached_a = _connect(q_rand, tree_a, epsilon, robot, weights=joint_weights, **validity_kwargs)
+        q_reached_b = _connect(q_reached_a, tree_b, epsilon, robot, weights=joint_weights, **validity_kwargs)
         if np.array_equal(q_reached_a, q_reached_b):
             waypoints = _combine_paths(
                 start_tree,
-                start_tree.nearest_neighbor(q_reached_a),
+                start_tree.nearest_neighbor(q_reached_a, joint_weights),
                 goal_tree,
-                goal_tree.nearest_neighbor(q_reached_a),
+                goal_tree.nearest_neighbor(q_reached_a, joint_weights),
             )
             # Ignore the last value which corresponds to the goal tree's sink node.
+            set_arm_config(robot, q_init)
             return waypoints[:-1]
 
         # swap trees
         tree_a, tree_b = tree_b, tree_a
         swapped = not swapped
+
+    set_arm_config(robot, q_init)
+    return None

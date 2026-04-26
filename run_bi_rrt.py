@@ -1,8 +1,10 @@
 """Example of how to run the bi-directional RRT planner to get a plan."""
-
+import sys
 from simulation.scene import Scene
 import json
-from planning.bi_rrt import plan_bi_rrt, random_arm_config, set_arm_config
+from planning.bi_rrt import plan_bi_rrt, set_arm_config
+from planning.rrt_utils_config import is_valid_config
+import numpy as np
 import pybullet as p
 import time
 
@@ -18,11 +20,52 @@ if __name__ == "__main__":
     scene.start_physics_client(gui=_GUI)
     scene.load_all_models()
 
+    target_object_name = scene_data["target_object"]
+    cost_map = scene.generate_cost_map(scene_file=scene_file, target_object_name=target_object_name)
+    cost_dict = scene.cost_dict
+
     robot, ee_link_index = scene.load_robot()
 
-    # TODO: remove the rng seeds? Currently have them fixed for debugging
-    goals = [random_arm_config(robot, seed=i) for i in range(3)]
-    plan = plan_bi_rrt(robot, goals, seed=42)
+    _PANDA_LOWER = [-2.8973, -1.7628, -2.8973, -3.0718, -2.8973,  0.0,    -2.8973]
+    _PANDA_UPPER = [ 2.8973,  1.7628,  2.8973, -0.0698,  2.8973,  3.7525,  2.8973]
+    _PANDA_RANGE = [upper - lower for lower, upper in zip(_PANDA_LOWER, _PANDA_UPPER)]
+    _IK_GOAL_TOLERANCE = 0.01
+
+    rng = np.random.default_rng(seed=0)
+    q_init = [p.getJointState(robot, i)[0] for i in range(7)]
+    lower, upper = np.array(_PANDA_LOWER), np.array(_PANDA_UPPER)
+    goals = []
+    attempts = 0
+    while len(goals) < 20 and attempts < 200:
+        attempts += 1
+        q_rand = rng.uniform(_PANDA_LOWER, _PANDA_UPPER)
+        for i, pos in enumerate(q_rand):
+            p.resetJointState(robot, i, pos)
+        q_ik = list(p.calculateInverseKinematics(
+            robot, ee_link_index, scene.target_position,
+            lowerLimits=_PANDA_LOWER,
+            upperLimits=_PANDA_UPPER,
+            jointRanges=_PANDA_RANGE,
+            restPoses=q_rand,
+            maxNumIterations=300,
+            residualThreshold=1e-4,
+        ))[:7]
+        q_ik = np.array(q_ik)
+        if np.any(q_ik < lower) or np.any(q_ik > upper):
+            continue
+        for i, pos in enumerate(q_ik):
+            p.resetJointState(robot, i, pos)
+        ee_pos = np.array(p.getLinkState(robot, ee_link_index)[4])
+        if np.linalg.norm(ee_pos - np.array(scene.target_position)) > _IK_GOAL_TOLERANCE:
+            continue
+        if not is_valid_config(robot, q_ik, cost_dict=cost_dict, ignored_body_ids=[scene.target_id], ignored_robot_link_ids=[-1]):
+            continue
+        goals.append(np.array(q_ik))
+    for i, pos in enumerate(q_init):
+        p.resetJointState(robot, i, pos)
+    print(f"[INFO] generated {len(goals)} valid IK goals from {attempts} attempts")
+
+    plan = plan_bi_rrt(robot, goals, cost_dict=cost_dict, target_id=scene.target_id, seed=42)
 
     if plan is None:
         print("planning failed")

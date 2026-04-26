@@ -59,6 +59,61 @@ def is_free_config_edge(config1, config2, robot, ee_link_index, voxel_grid, voxe
     return True
 
 
+def is_in_unsafe_contact(robot, cost_dict, max_cost, ignored_body_ids=None, ignored_robot_link_ids=None):
+    """Return True when the robot touches a body whose cost exceeds max_cost.
+
+    Bodies not in cost_dict are treated as fully blocking. Contacts with the
+    target are allowed when the target is marked with cost -1, or when its body
+    id is included in ignored_body_ids. PyBullet uses robot link index -1 for
+    the base link.
+    """
+    ignored_body_ids = set() if ignored_body_ids is None else set(ignored_body_ids)
+    ignored_robot_link_ids = set() if ignored_robot_link_ids is None else set(ignored_robot_link_ids)
+
+    p.performCollisionDetection()
+    contacts = p.getContactPoints(bodyA=robot)
+    for contact in contacts:
+        body_b = contact[2]
+        robot_link = contact[3]
+        if robot_link in ignored_robot_link_ids or body_b == robot or body_b in ignored_body_ids:
+            continue
+        cost = cost_dict.get(body_b, float('inf'))
+        if cost == -1:
+            continue
+        if cost > max_cost:
+            return True
+    return False
+
+
+def config_has_unsafe_contact(robot, joint_positions, cost_dict, max_cost, ignored_body_ids=None, ignored_robot_link_ids=None):
+    for i, pos in enumerate(joint_positions):
+        p.resetJointState(robot, i, pos)
+    return is_in_unsafe_contact(robot, cost_dict, max_cost, ignored_body_ids, ignored_robot_link_ids)
+
+
+def has_blocking_contact(robot, cost_dict=None, max_contact_cost=9, ignored_body_ids=None, ignored_robot_link_ids=None):
+    ignored_body_ids = set() if ignored_body_ids is None else set(ignored_body_ids)
+    ignored_robot_link_ids = set() if ignored_robot_link_ids is None else set(ignored_robot_link_ids)
+    if cost_dict is not None:
+        return is_in_unsafe_contact(robot, cost_dict, max_contact_cost, ignored_body_ids=ignored_body_ids, ignored_robot_link_ids=ignored_robot_link_ids)
+
+    p.performCollisionDetection()
+    return any(contact[3] not in ignored_robot_link_ids and contact[2] not in ignored_body_ids for contact in p.getContactPoints(bodyA=robot))
+
+
+def is_valid_config(robot, joint_positions, cost_dict=None, max_contact_cost=9, ignored_body_ids=None, ignored_robot_link_ids=None, ee_link_index=None, voxel_grid=None, voxel_size=None, origin=None, max_voxel_cost=None, whole_robot=False):
+    for i, pos in enumerate(joint_positions):
+        p.resetJointState(robot, i, pos)
+
+    if voxel_grid is not None:
+        if ee_link_index is None or voxel_size is None or origin is None or max_voxel_cost is None:
+            raise ValueError("ee_link_index, voxel_size, origin, and max_voxel_cost are required when voxel_grid is provided.")
+        if not is_free_config(robot, joint_positions, ee_link_index, voxel_grid, voxel_size, origin, max_voxel_cost, whole_robot=whole_robot):
+            return False
+
+    return not has_blocking_contact(robot, cost_dict=cost_dict, max_contact_cost=max_contact_cost, ignored_body_ids=ignored_body_ids, ignored_robot_link_ids=ignored_robot_link_ids)
+
+
 def config_intersects_target(robot, joint_positions, ee_link_index, voxel_grid, voxel_size, origin):
     ee_pos = config_to_ee_pos(robot, joint_positions, ee_link_index)
     x, y, z = world_to_grid(ee_pos, voxel_size, origin)

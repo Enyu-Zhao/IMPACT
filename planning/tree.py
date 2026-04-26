@@ -54,15 +54,20 @@ class Tree:
         """Check if a node is in the tree."""
         return node in self.nodes
 
-    def nearest_neighbor(self, q: np.ndarray) -> Node:
+    def nearest_neighbor(self, q: np.ndarray, weights: np.ndarray | None = None) -> Node:
         """Finds the nearest node in the tree to the given q.
 
         Args:
             q: The desired q.
+            weights: Optional per-joint weights applied before computing distance.
+                     Use 1/joint_range to normalise across joints with different ranges.
 
         Returns: The node from the tree that's closest to `q`.
         """
-        closest_node = min(self.nodes, key=lambda node: np.linalg.norm(node.q - q))
+        if weights is not None:
+            closest_node = min(self.nodes, key=lambda node: np.linalg.norm((node.q - q) * weights))
+        else:
+            closest_node = min(self.nodes, key=lambda node: np.linalg.norm(node.q - q))
         return closest_node
 
     def get_path(self, node: Node) -> list[Node]:
