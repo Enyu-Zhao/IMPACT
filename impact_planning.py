@@ -48,31 +48,31 @@ def find_path(scene_name, algo, cost_map, start_position, target_position,
     return path, cost
 
 
-_PANDA_LOWER = [-2.8973, -1.7628, -2.8973, -3.0718, -2.8973,  0.0,    -2.8973]
-_PANDA_UPPER = [ 2.8973,  1.7628,  2.8973, -0.0698,  2.8973,  3.7525,  2.8973]
-_PANDA_RANGE = [upper - lower for lower, upper in zip(_PANDA_LOWER, _PANDA_UPPER)]
+_ARM_DOF = 7
 _IK_GOAL_TOLERANCE = 0.01
 
 def find_path_bi_rrt(robot, ee_link_index, target_position, cost_dict, target_id=None):
     rng = np.random.default_rng(seed=0)
-    q_init = [p.getJointState(robot, i)[0] for i in range(7)]
-    lower, upper = np.array(_PANDA_LOWER), np.array(_PANDA_UPPER)
+    q_init = [p.getJointState(robot, i)[0] for i in range(_ARM_DOF)]
+    lower = np.array([p.getJointInfo(robot, i)[8] for i in range(_ARM_DOF)])
+    upper = np.array([p.getJointInfo(robot, i)[9] for i in range(_ARM_DOF)])
+    joint_ranges = upper - lower
     goals = []
     attempts = 0
     while len(goals) < 20 and attempts < 200:
         attempts += 1
-        q_rand = rng.uniform(_PANDA_LOWER, _PANDA_UPPER)
+        q_rand = rng.uniform(lower, upper)
         for i, pos in enumerate(q_rand):
             p.resetJointState(robot, i, pos)
         q_ik = np.array(p.calculateInverseKinematics(
             robot, ee_link_index, target_position,
-            lowerLimits=_PANDA_LOWER,
-            upperLimits=_PANDA_UPPER,
-            jointRanges=_PANDA_RANGE,
+            lowerLimits=lower.tolist(),
+            upperLimits=upper.tolist(),
+            jointRanges=joint_ranges.tolist(),
             restPoses=q_rand,
             maxNumIterations=300,
             residualThreshold=1e-4,
-        ))[:7]
+        ))[:_ARM_DOF]
         if np.any(q_ik < lower) or np.any(q_ik > upper):
             continue
         for i, pos in enumerate(q_ik):

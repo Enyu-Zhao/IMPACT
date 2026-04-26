@@ -173,6 +173,8 @@ def is_valid_config(
         
         if not is_free_config(robot, joint_positions, ee_link_index, voxel_grid, voxel_size, origin, max_cost, whole_robot=whole_robot, use_all_occupied_voxels=use_all_occupied_voxels):
             return False
+        else:
+            return True
     
     print(f"The voxel grid cost is not provided, using mesh contact to determine validity")
     return not is_in_unsafe_contact(robot, cost_dict or {}, max_cost, ignored_body_ids=ignored_body_ids, ignored_robot_link_ids=ignored_robot_link_ids)
