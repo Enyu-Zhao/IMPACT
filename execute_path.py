@@ -6,13 +6,25 @@ import time
 import numpy as np
 
 from planning.rrt_utils import draw_path, interpolate_path, smooth_path
+from planning.bi_rrt import set_arm_config
 from simulation.scene import Scene
 from simulation.evaluation import evaluate_path, ik_pose_xyz, ik_pose_xyz_yaw, shortest_wrap
-from simulation.grasp_utils import load_grasps, grasps_to_world, best_grasp, grasp_position, grasp_approach, grasp_yaw_deg
 
-FINGER_OPEN   = 0.04
-FINGER_CLOSED = 0.0
-FINGER_FORCE  = 150
+
+def execute_joint_space(robot, config_path, samples=40, settle_steps=100):
+    p.setRealTimeSimulation(0)
+    num_joints = len(config_path[0])
+    set_arm_config(robot, config_path[0])
+    for i in range(len(config_path) - 1):
+        q0 = np.array(config_path[i])
+        q1 = np.array(config_path[i + 1])
+        for t in np.linspace(0, 1, samples, endpoint=False):
+            q = q0 + t * (q1 - q0)
+            for j in range(num_joints):
+                p.setJointMotorControl2(robot, j, p.POSITION_CONTROL, targetPosition=float(q[j]), force=500)
+            p.stepSimulation()
+    for _ in range(settle_steps):
+        p.stepSimulation()
 
 
 def execute_smooth_xyz(robot, ee_link_index, xyz_path, rest_pose, samples=40, settle_steps=100):
@@ -176,43 +188,31 @@ def main(args):
     scene.load_cost_map(target_object_name)
 
     robot, ee_link_index = scene.load_robot()
-    obstacles = scene.get_obstacles()
 
-    steps = 5
-    path = smooth_path(path, window_size=5)
-    path = interpolate_path(path, steps)
-
-    evaluation_data = evaluate_path(path, robot, obstacles, ee_link_index, scene)
-    with open(f"{log_dir}/{filename}_metrics.json", "w") as f:
-        json.dump(evaluation_data, f, indent=4)
-
-    draw_path(path)
     p.resetDebugVisualizerCamera(0.6, 270, -30, [0.2, 0, 0.3])
-    for _ in range(30):
-        p.stepSimulation()
-
     log_id = p.startStateLogging(p.STATE_LOGGING_VIDEO_MP4, f"{log_dir}/{filename}_video.mp4")
 
-    try:
+    if args.algo == 'bi_rrt':
+        execute_joint_space(robot, path)
+    else:
+        obstacles = scene.get_obstacles()
+        steps = 5
+        path = smooth_path(path, window_size=5)
+        path = interpolate_path(path, steps)
+        evaluation_data = evaluate_path(path, robot, obstacles, ee_link_index, scene)
+        with open(f"{log_dir}/{filename}_metrics.json", "w") as f:
+            json.dump(evaluation_data, f, indent=4)
+        draw_path(path)
+        for _ in range(30):
+            p.stepSimulation()
         if args.algo == 'a_star':
             execute_smooth_xyz_yaw(robot, ee_link_index, path, scene.initial_joint_positions, samples=40)
         else:
             execute_smooth_xyz(robot, ee_link_index, path, scene.initial_joint_positions, samples=40)
 
-        if world_grasps:
-            ee_pos = p.getLinkState(robot, ee_link_index)[4]
-            chosen = best_grasp(world_grasps, ee_pos)
-            print(f"[grasps] executing grasp {chosen['grasp_id']} (score={chosen['score']:.3f})")
-            execute_grasp_and_lift(robot, ee_link_index, chosen["transform"],
-                                   scene.initial_joint_positions,
-                                   target_id=scene.target_id)
-    except Exception as e:
-        import traceback
-        print(f"[ERROR] during execution: {e}")
-        traceback.print_exc()
-    finally:
-        p.stopStateLogging(log_id)
-        p.disconnect()
+    p.stopStateLogging(log_id)
+
+    p.disconnect()
 
 
 if __name__ == "__main__":

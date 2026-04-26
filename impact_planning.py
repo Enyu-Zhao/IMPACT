@@ -2,6 +2,7 @@ import pybullet as p
 import json
 import os
 import argparse
+import numpy as np
 
 from simulation.scene import Scene
 from simulation.grasp_utils import (load_grasps, grasps_to_world,
@@ -12,6 +13,8 @@ from planning.rrt_star import RRTStarVoxelGrid
 from planning.a_star import AStar
 from planning.a_star_no_dir import PlainAStar
 from planning.sample_pushing import analyze_push_safety, process_voxel_scene
+from planning.bi_rrt import plan_bi_rrt
+from planning.rrt_utils_config import is_valid_config
 
 
 def find_path(scene_name, algo, cost_map, start_position, target_position,
@@ -45,6 +48,52 @@ def find_path(scene_name, algo, cost_map, start_position, target_position,
     return path, cost
 
 
+_PANDA_LOWER = [-2.8973, -1.7628, -2.8973, -3.0718, -2.8973,  0.0,    -2.8973]
+_PANDA_UPPER = [ 2.8973,  1.7628,  2.8973, -0.0698,  2.8973,  3.7525,  2.8973]
+_PANDA_RANGE = [upper - lower for lower, upper in zip(_PANDA_LOWER, _PANDA_UPPER)]
+_IK_GOAL_TOLERANCE = 0.01
+
+def find_path_bi_rrt(robot, ee_link_index, target_position, cost_dict, target_id=None):
+    rng = np.random.default_rng(seed=0)
+    q_init = [p.getJointState(robot, i)[0] for i in range(7)]
+    lower, upper = np.array(_PANDA_LOWER), np.array(_PANDA_UPPER)
+    goals = []
+    attempts = 0
+    while len(goals) < 20 and attempts < 200:
+        attempts += 1
+        q_rand = rng.uniform(_PANDA_LOWER, _PANDA_UPPER)
+        for i, pos in enumerate(q_rand):
+            p.resetJointState(robot, i, pos)
+        q_ik = np.array(p.calculateInverseKinematics(
+            robot, ee_link_index, target_position,
+            lowerLimits=_PANDA_LOWER,
+            upperLimits=_PANDA_UPPER,
+            jointRanges=_PANDA_RANGE,
+            restPoses=q_rand,
+            maxNumIterations=300,
+            residualThreshold=1e-4,
+        ))[:7]
+        if np.any(q_ik < lower) or np.any(q_ik > upper):
+            continue
+        for i, pos in enumerate(q_ik):
+            p.resetJointState(robot, i, pos)
+        ee_pos = np.array(p.getLinkState(robot, ee_link_index)[4])
+        if np.linalg.norm(ee_pos - np.array(target_position)) > _IK_GOAL_TOLERANCE:
+            continue
+        if not is_valid_config(robot, q_ik, cost_dict=cost_dict, ignored_body_ids=[target_id], ignored_robot_link_ids=[-1]):
+            continue
+        goals.append(q_ik)
+    for i, pos in enumerate(q_init):
+        p.resetJointState(robot, i, pos)
+    print(f"[INFO] generated {len(goals)} valid IK goals from {attempts} attempts")
+    path = plan_bi_rrt(robot, goals, cost_dict, target_id=target_id, seed=42)
+    for i, pos in enumerate(q_init):
+        p.resetJointState(robot, i, pos)
+    if path is not None:
+        path = [q.tolist() for q in path]
+    return path
+
+
 def main(args):
     log_dir = f"logs/{args.scene}/{args.algo}"
     os.makedirs(log_dir, exist_ok=True)
@@ -64,25 +113,13 @@ def main(args):
     cost_map.visualize_voxel_grid()
 
     robot, ee_link_index = scene.load_robot()
-    initial_end_effector_position = p.getLinkState(robot, ee_link_index)[4]
 
-    # Load grasps for the target object and transform to world frame
-    obj_info = scene_data["object_models"][target_object_name]
-    grasp_data = load_grasps(target_object_name, obj_info["scale"])
-    world_grasps = None
-    if grasp_data:
-        world_grasps = grasps_to_world(
-            grasp_data,
-            obj_info["position"],
-            obj_info.get("orientation", [0, 0, 0]),
-        )
-        print(f"[grasps] loaded {len(world_grasps)} grasps for {target_object_name}")
+    if args.algo == 'bi_rrt':
+        path = find_path_bi_rrt(robot, ee_link_index, scene.target_position, scene.cost_dict, target_id=scene.target_id)
+        cost = 0
     else:
-        print(f"[grasps] no grasp file found for {target_object_name}, using object voxels as goal")
-
-    path, cost = find_path(args.scene, args.algo, cost_map, initial_end_effector_position,
-                           scene.target_position, world_grasps=world_grasps,
-                           log_dir=log_dir, filename=filename)
+        initial_end_effector_position = p.getLinkState(robot, ee_link_index)[4]
+        path, cost = find_path(args.scene, args.algo, cost_map, initial_end_effector_position, scene.target_position, log_dir, filename)
 
     if path:
         path_file = f'{log_dir}/{filename}_path.json'
