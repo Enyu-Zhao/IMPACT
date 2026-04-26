@@ -1,25 +1,14 @@
 import pybullet as p
 import numpy as np
 
-from planning.rrt_utils import world_to_grid, distance, compute_distance_transform
+from planning.rrt_utils import world_to_grid
 
 
-class ConfigNode:
-    def __init__(self, joint_positions, parent=None):
-        self.position = np.array(joint_positions, dtype=float)
-        self.parent = parent
-        self.cost = 0 if parent is None else parent.cost
-
-
-def config_to_ee_pos(robot, joint_positions, ee_link_index):
+def ee_voxel_cost(robot, joint_positions, ee_link_index, voxel_grid, voxel_size, origin):
+    # Key function for getting the cost of a configuration based on the end-effector position in the voxel grid
     for i, pos in enumerate(joint_positions):
         p.resetJointState(robot, i, pos)
-    return np.array(p.getLinkState(robot, ee_link_index)[4])
-
-
-def config_voxel_cost(robot, joint_positions, ee_link_index, voxel_grid, voxel_size, origin):
-    # Key function for getting the cost of a configuration based on the end-effector position in the voxel grid
-    ee_pos = config_to_ee_pos(robot, joint_positions, ee_link_index)
+    ee_pos = np.array(p.getLinkState(robot, ee_link_index)[4])
     x, y, z = world_to_grid(ee_pos, voxel_size, origin)
     x_dim, y_dim, z_dim = voxel_grid.shape
     if 0 <= x < x_dim and 0 <= y < y_dim and 0 <= z < z_dim:
@@ -27,9 +16,23 @@ def config_voxel_cost(robot, joint_positions, ee_link_index, voxel_grid, voxel_s
     return float('inf')
 
 
-def robot_max_voxel_cost(robot, joint_positions, ee_link_index, voxel_grid, voxel_size, origin):
+def robot_max_voxel_cost(robot, joint_positions, ee_link_index, voxel_grid, voxel_size, origin, use_all_occupied_voxels=False):
     for i, pos in enumerate(joint_positions):
         p.resetJointState(robot, i, pos)
+
+    # Calculate the cost for the whole robot.
+    if use_all_occupied_voxels:
+        costs = robot_occupied_voxel_costs(
+            robot,
+            joint_positions,
+            voxel_grid,
+            voxel_size,
+            origin,
+            link_indices=range(ee_link_index + 1),
+        )
+        return max(costs) if costs else float('inf')
+
+    # Simplified version that only considers the voxel cost at each link's frame position.
     x_dim, y_dim, z_dim = voxel_grid.shape
     max_cost = 0
     for link_idx in range(ee_link_index + 1):
@@ -42,21 +45,46 @@ def robot_max_voxel_cost(robot, joint_positions, ee_link_index, voxel_grid, voxe
     return max_cost
 
 
-def is_free_config(robot, joint_positions, ee_link_index, voxel_grid, voxel_size, origin, max_cost, whole_robot=False):
+def robot_occupied_voxel_costs(robot, joint_positions, voxel_grid, voxel_size, origin, link_indices=None):
+    for i, pos in enumerate(joint_positions):
+        p.resetJointState(robot, i, pos)
+
+    if link_indices is None:
+        link_indices = range(p.getNumJoints(robot))
+
+    costs = []
+    max_valid = np.array(voxel_grid.shape) - 1
+    for link_idx in link_indices:
+        if link_idx == -1:
+            continue
+
+        aabb_min, aabb_max = p.getAABB(robot, link_idx)
+        min_idx = np.floor((np.array(aabb_min) - origin) / voxel_size).astype(int)
+        max_idx = np.floor((np.array(aabb_max) - origin) / voxel_size).astype(int)
+        min_idx = np.maximum(min_idx, 0)
+        max_idx = np.minimum(max_idx, max_valid)
+        if np.any(min_idx > max_idx):
+            continue
+
+        for x in range(min_idx[0], max_idx[0] + 1):
+            for y in range(min_idx[1], max_idx[1] + 1):
+                for z in range(min_idx[2], max_idx[2] + 1):
+                    costs.append(voxel_grid[x, y, z])
+    return costs
+
+
+
+
+
+
+
+def is_free_config(robot, joint_positions, ee_link_index, voxel_grid, voxel_size, origin, max_cost, whole_robot=False, use_all_occupied_voxels=False):
     if whole_robot:
-        cost = robot_max_voxel_cost(robot, joint_positions, ee_link_index, voxel_grid, voxel_size, origin)
+        cost = robot_max_voxel_cost(robot, joint_positions, ee_link_index, voxel_grid, voxel_size, origin, use_all_occupied_voxels=use_all_occupied_voxels)
     else:
-        cost = config_voxel_cost(robot, joint_positions, ee_link_index, voxel_grid, voxel_size, origin)
+        cost = ee_voxel_cost(robot, joint_positions, ee_link_index, voxel_grid, voxel_size, origin)
     return cost <= max_cost
 
-
-def is_free_config_edge(config1, config2, robot, ee_link_index, voxel_grid, voxel_size, origin, max_cost, steps=10, whole_robot=False):
-    for i in range(1, steps + 1):
-        t = i / steps
-        interp = config1 + t * (config2 - config1)
-        if not is_free_config(robot, interp, ee_link_index, voxel_grid, voxel_size, origin, max_cost, whole_robot):
-            return False
-    return True
 
 
 def is_in_unsafe_contact(robot, cost_dict, max_cost, ignored_body_ids=None, ignored_robot_link_ids=None):
@@ -84,88 +112,67 @@ def is_in_unsafe_contact(robot, cost_dict, max_cost, ignored_body_ids=None, igno
             return True
     return False
 
+# Main function for RRT-based planning to call from both bi_rrt.py and impact_planning.py, which includes the common code for generating valid IK goal configurations and checking config validity.
+def is_valid_config(
+    robot, 
+    joint_positions, 
+    cost_dict=None, 
+    max_cost=9, 
+    ignored_body_ids=None, 
+    ignored_robot_link_ids=None, 
+    ee_link_index=None, 
+    voxel_grid=None, 
+    voxel_size=None, 
+    origin=None, 
+    whole_robot=False, 
+    use_all_occupied_voxels=False):
+    """Check whether a robot joint configuration is valid.
 
-def config_has_unsafe_contact(robot, joint_positions, cost_dict, max_cost, ignored_body_ids=None, ignored_robot_link_ids=None):
+    The check has two parts:
+    1. Voxel-cost checking, enabled when voxel_grid is provided.
+    2. PyBullet contact checking, always performed.
+
+    Args:
+        robot: PyBullet body id for the robot.
+        joint_positions: Joint values for the robot arm configuration.
+        cost_dict: Optional mapping from PyBullet body id to object cost.
+            Missing body ids are treated as infinite cost, so contact with them
+            is blocking. A cost of -1 is treated as the target and allowed.
+        max_cost: Maximum allowed cost for both voxel cells and contacted
+            objects. Costs above this value make the configuration invalid.
+        ignored_body_ids: Body ids to ignore during contact checking, commonly
+            the target object id.
+        ignored_robot_link_ids: Robot link ids to ignore during contact
+            checking. PyBullet uses -1 for the base link.
+        ee_link_index: End-effector link index. Required if voxel_grid is used.
+        voxel_grid: Optional cost grid used for voxel-cost checking.
+        voxel_size: World-space size of each voxel. Required if voxel_grid is
+            used.
+        origin: World-space origin of the voxel grid. Required if voxel_grid is
+            used.
+        whole_robot: If False, voxel checking only uses the end-effector voxel.
+            If True, voxel checking uses robot links up to ee_link_index.
+        use_all_occupied_voxels: Only used when whole_robot is True. If False,
+            each link is checked at its link-frame point. If True, each link's
+            AABB is converted to occupied voxels and all those voxel costs are
+            checked.
+
+    Returns:
+        True if the configuration is under the voxel/contact cost threshold and
+        has no blocking contact. False otherwise.
+    """
     for i, pos in enumerate(joint_positions):
         p.resetJointState(robot, i, pos)
-    return is_in_unsafe_contact(robot, cost_dict, max_cost, ignored_body_ids, ignored_robot_link_ids)
 
-
-def has_blocking_contact(robot, cost_dict=None, max_contact_cost=9, ignored_body_ids=None, ignored_robot_link_ids=None):
-    ignored_body_ids = set() if ignored_body_ids is None else set(ignored_body_ids)
-    ignored_robot_link_ids = set() if ignored_robot_link_ids is None else set(ignored_robot_link_ids)
-    if cost_dict is not None:
-        return is_in_unsafe_contact(robot, cost_dict, max_contact_cost, ignored_body_ids=ignored_body_ids, ignored_robot_link_ids=ignored_robot_link_ids)
-
-    p.performCollisionDetection()
-    return any(contact[3] not in ignored_robot_link_ids and contact[2] not in ignored_body_ids for contact in p.getContactPoints(bodyA=robot))
-
-
-def is_valid_config(robot, joint_positions, cost_dict=None, max_contact_cost=9, ignored_body_ids=None, ignored_robot_link_ids=None, ee_link_index=None, voxel_grid=None, voxel_size=None, origin=None, max_voxel_cost=None, whole_robot=False):
-    for i, pos in enumerate(joint_positions):
-        p.resetJointState(robot, i, pos)
 
     if voxel_grid is not None:
-        if ee_link_index is None or voxel_size is None or origin is None or max_voxel_cost is None:
-            raise ValueError("ee_link_index, voxel_size, origin, and max_voxel_cost are required when voxel_grid is provided.")
-        if not is_free_config(robot, joint_positions, ee_link_index, voxel_grid, voxel_size, origin, max_voxel_cost, whole_robot=whole_robot):
+        
+        if ee_link_index is None or voxel_size is None or origin is None:
+            raise ValueError("ee_link_index, voxel_size, and origin are required when voxel_grid is provided.")
+        
+        
+        if not is_free_config(robot, joint_positions, ee_link_index, voxel_grid, voxel_size, origin, max_cost, whole_robot=whole_robot, use_all_occupied_voxels=use_all_occupied_voxels):
             return False
-
-    return not has_blocking_contact(robot, cost_dict=cost_dict, max_contact_cost=max_contact_cost, ignored_body_ids=ignored_body_ids, ignored_robot_link_ids=ignored_robot_link_ids)
-
-
-def config_intersects_target(robot, joint_positions, ee_link_index, voxel_grid, voxel_size, origin):
-    ee_pos = config_to_ee_pos(robot, joint_positions, ee_link_index)
-    x, y, z = world_to_grid(ee_pos, voxel_size, origin)
-    x_dim, y_dim, z_dim = voxel_grid.shape
-    if 0 <= x < x_dim and 0 <= y < y_dim and 0 <= z < z_dim:
-        return voxel_grid[x, y, z] == -1
-    return False
-
-
-def reconstruct_config_path(node):
-    path = []
-    while node:
-        path.append(node.position.tolist())
-        node = node.parent
-    return path[::-1]
-
-
-def steer_config(from_config, to_config, step_size):
-    direction = to_config - from_config
-    length = np.linalg.norm(direction)
-    if length < 1e-6:
-        return from_config.copy()
-    return from_config + step_size * (direction / length)
-
-
-def evaluate_config_path_cost(path, robot, ee_link_index, voxel_grid, voxel_size, origin, whole_robot=False):
-    total_cost = 0
-    for joint_positions in path:
-        if whole_robot:
-            cost = robot_max_voxel_cost(robot, joint_positions, ee_link_index, voxel_grid, voxel_size, origin)
-        else:
-            cost = config_voxel_cost(robot, joint_positions, ee_link_index, voxel_grid, voxel_size, origin)
-        if cost != float('inf'):
-            total_cost += cost
-    return total_cost
-
-
-def evaluate_config_distance_to_obstacles(path, robot, ee_link_index, distance_transform, voxel_size, origin, whole_robot=False):
-    min_distance = float('inf')
-    x_dim, y_dim, z_dim = distance_transform.shape
-    for joint_positions in path:
-        if whole_robot:
-            for i, pos in enumerate(joint_positions):
-                p.resetJointState(robot, i, pos)
-            link_positions = [np.array(p.getLinkState(robot, idx)[4]) for idx in range(ee_link_index + 1)]
-        else:
-            link_positions = [config_to_ee_pos(robot, joint_positions, ee_link_index)]
-
-        for link_pos in link_positions:
-            x, y, z = world_to_grid(link_pos, voxel_size, origin)
-            if 0 <= x < x_dim and 0 <= y < y_dim and 0 <= z < z_dim:
-                d = distance_transform[x, y, z]
-                if d < min_distance:
-                    min_distance = d
-    return min_distance
+    
+    print(f"The voxel grid cost is not provided, using mesh contact to determine validity")
+    return not is_in_unsafe_contact(robot, cost_dict or {}, max_cost, ignored_body_ids=ignored_body_ids, ignored_robot_link_ids=ignored_robot_link_ids)

@@ -69,27 +69,17 @@ def _step(start: np.ndarray, target: np.ndarray, max_step_dist: float) -> np.nda
     unit_vec = direction / magnitude
     return start + (unit_vec * min(max_step_dist, magnitude))
 
-def _connect(q_target, tree, epsilon, robot, *, cost_dict=None, max_contact_cost: float = _MAX_CONTACT_COST, ignored_body_ids=None, ignored_robot_link_ids=None, weights=None, ee_link_index=None, voxel_grid=None, voxel_size=None, origin=None, max_voxel_cost=None, whole_robot: bool = False) -> np.ndarray:
+def _connect(q_target, tree, epsilon, robot, config=None, weights=None) -> np.ndarray:
     closest_node = tree.nearest_neighbor(q_target, weights)
     q = closest_node.q
     while True:
         if np.array_equal(q, q_target):
             return q
         q_next = _step(q, q_target, epsilon)
-        if not is_valid_config(
-            robot,
-            q_next,
-            cost_dict=cost_dict,
-            max_contact_cost=max_contact_cost,
-            ignored_body_ids=ignored_body_ids,
-            ignored_robot_link_ids=ignored_robot_link_ids,
-            ee_link_index=ee_link_index,
-            voxel_grid=voxel_grid,
-            voxel_size=voxel_size,
-            origin=origin,
-            max_voxel_cost=max_voxel_cost,
-            whole_robot=whole_robot,
-        ):
+        set_arm_config(robot, q_next)
+        if config is None and _contact_points(robot): # No tolerance for contact
+            return q
+        if config is not None and not is_valid_config(robot, q_next, **config):
             return q
         closest_node = Node(q_next, closest_node)
         tree.add_node(closest_node)
@@ -127,7 +117,7 @@ def _combine_paths(
         path_start.pop()
     return path_start + path_end
 
-def plan_bi_rrt(robot, goal_arm_configs, cost_dict=None, target_id=None, seed: int | None = None, epsilon=0.05, goal_biasing_probability=0.05, max_iters=5000, max_contact_cost: float = _MAX_CONTACT_COST, ignored_robot_link_ids=None, cost_map=None, ee_link_index=None, voxel_grid=None, voxel_size=None, origin=None, max_voxel_cost=None, whole_robot: bool = False) -> list[np.ndarray] | None:
+def plan_bi_rrt(robot, goal_arm_configs, cost_dict=None, target_id=None, seed: int | None = None, epsilon=0.05, goal_biasing_probability=0.05, max_iters=5000, max_cost: float = _MAX_CONTACT_COST, ignored_robot_link_ids=None, cost_map=None, ee_link_index=None, voxel_grid=None, voxel_size=None, origin=None, whole_robot: bool = False, use_all_occupied_voxels: bool = False) -> list[np.ndarray] | None:
 
     # cost_dict maps PyBullet body IDs to GPT safety scores (0-10, or -1 for target).
     # It is used to decide which contacts are permissible. When None, any
@@ -145,20 +135,19 @@ def plan_bi_rrt(robot, goal_arm_configs, cost_dict=None, target_id=None, seed: i
         voxel_grid = cost_map.voxel_grid
         voxel_size = cost_map.voxel_size
         origin = cost_map.origin
-    if voxel_grid is not None and max_voxel_cost is None:
-        max_voxel_cost = max_contact_cost
 
-    validity_kwargs = dict(
+    # The config for toleraing safe contacts.
+    config = dict(
         cost_dict=cost_dict,
-        max_contact_cost=max_contact_cost,
+        max_cost=max_cost,
         ignored_body_ids=ignored_body_ids,
         ignored_robot_link_ids=ignored_robot_link_ids,
         ee_link_index=ee_link_index,
         voxel_grid=voxel_grid,
         voxel_size=voxel_size,
         origin=origin,
-        max_voxel_cost=max_voxel_cost,
         whole_robot=whole_robot,
+        use_all_occupied_voxels=use_all_occupied_voxels,
     )
 
     valid_goal_configs = []
@@ -167,7 +156,7 @@ def plan_bi_rrt(robot, goal_arm_configs, cost_dict=None, target_id=None, seed: i
         if np.any(q_goal < lower) or np.any(q_goal > upper):
             print(f"[WARN] skipping goal config outside joint limits: {q_goal}")
             continue
-        if not is_valid_config(robot, q_goal, **validity_kwargs):
+        if not is_valid_config(robot, q_goal, **config):
             print(f"[WARN] skipping invalid goal config: {q_goal}")
             continue
         valid_goal_configs.append(q_goal)
@@ -205,8 +194,8 @@ def plan_bi_rrt(robot, goal_arm_configs, cost_dict=None, target_id=None, seed: i
             # sample a random config
             q_rand = rng.uniform(joint_limits[0], joint_limits[1])
 
-        q_reached_a = _connect(q_rand, tree_a, epsilon, robot, weights=joint_weights, **validity_kwargs)
-        q_reached_b = _connect(q_reached_a, tree_b, epsilon, robot, weights=joint_weights, **validity_kwargs)
+        q_reached_a = _connect(q_rand, tree_a, epsilon, robot, config, joint_weights)
+        q_reached_b = _connect(q_reached_a, tree_b, epsilon, robot, config, joint_weights)
         if np.array_equal(q_reached_a, q_reached_b):
             waypoints = _combine_paths(
                 start_tree,
