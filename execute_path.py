@@ -2,6 +2,7 @@ import pybullet as p
 import json
 import argparse
 import os
+import time
 import numpy as np
 
 from planning.rrt_utils import draw_path, interpolate_path, smooth_path
@@ -52,7 +53,7 @@ def execute_smooth_xyz_yaw(robot, ee_link_index, xyz_yaw_path, rest_pose, sample
     for q0, q1 in zip(q_key[:-1], q_key[1:]):
         dq = shortest_wrap(q0, q1)
         seg = q0 + dq * np.linspace(0, 1, samples, dtype=float)[:, None]
-        trajectory.extend(seg[1:])  
+        trajectory.extend(seg[1:])
 
     for q in trajectory:
         for j in range(7):
@@ -62,6 +63,91 @@ def execute_smooth_xyz_yaw(robot, ee_link_index, xyz_yaw_path, rest_pose, sample
 
     for _ in range(settle_steps):
         p.stepSimulation()
+
+
+def _set_arm(robot, q, steps, finger_pos=None, realtime=False):
+    for j in range(7):
+        p.setJointMotorControl2(robot, j, p.POSITION_CONTROL,
+                                targetPosition=float(q[j]), force=500)
+    for _ in range(steps):
+        if finger_pos is not None:
+            p.setJointMotorControl2(robot, 9,  p.POSITION_CONTROL,
+                                    targetPosition=finger_pos, force=FINGER_FORCE)
+            p.setJointMotorControl2(robot, 10, p.POSITION_CONTROL,
+                                    targetPosition=finger_pos, force=FINGER_FORCE)
+        p.stepSimulation()
+        if realtime:
+            time.sleep(1 / 240)
+
+
+def execute_grasp_and_lift(robot, ee_link_index, grasp_transform, rest_pose,
+                           target_id=None, standoff=0.08, lift_height=0.2, move_steps=300):
+    T        = np.array(grasp_transform)
+    gpos     = grasp_position(T)
+    approach = grasp_approach(T)
+    yaw      = grasp_yaw_deg(T)
+
+    pregrasp = (gpos - approach * standoff).tolist()
+    grasp    = gpos.tolist()
+    lift     = (gpos + np.array([0, 0, lift_height])).tolist()
+
+    # set target to a graspable mass (load_all_models sets everything to 100 kg)
+    if target_id is not None:
+        p.changeDynamics(target_id, -1, mass=0.3)
+
+    # open fingers
+    for _ in range(80):
+        p.setJointMotorControl2(robot, 9,  p.POSITION_CONTROL,
+                                targetPosition=FINGER_OPEN, force=FINGER_FORCE)
+        p.setJointMotorControl2(robot, 10, p.POSITION_CONTROL,
+                                targetPosition=FINGER_OPEN, force=FINGER_FORCE)
+        p.stepSimulation()
+        time.sleep(1 / 240)
+
+    # move to pre-grasp
+    q = ik_pose_xyz_yaw(robot, ee_link_index, pregrasp, yaw, rest_pose)
+    _set_arm(robot, q, move_steps, finger_pos=FINGER_OPEN, realtime=True)
+
+    # move to grasp pose
+    q = ik_pose_xyz_yaw(robot, ee_link_index, grasp, yaw, rest_pose)
+    _set_arm(robot, q, move_steps, finger_pos=FINGER_OPEN, realtime=True)
+
+    # close fingers slowly
+    for _ in range(250):
+        p.setJointMotorControl2(robot, 9,  p.POSITION_CONTROL,
+                                targetPosition=FINGER_CLOSED, force=FINGER_FORCE)
+        p.setJointMotorControl2(robot, 10, p.POSITION_CONTROL,
+                                targetPosition=FINGER_CLOSED, force=FINGER_FORCE)
+        p.stepSimulation()
+        time.sleep(1 / 240)
+
+    # attach object to gripper with a fixed constraint so it lifts reliably
+    constraint_id = None
+    if target_id is not None:
+        constraint_id = p.createConstraint(
+            robot, ee_link_index,
+            target_id, -1,
+            p.JOINT_FIXED,
+            [0, 0, 0],
+            [0, 0, 0],
+            [0, 0, 0],
+        )
+
+    # lift slowly while keeping fingers closed
+    q = ik_pose_xyz_yaw(robot, ee_link_index, lift, yaw, rest_pose)
+    _set_arm(robot, q, move_steps + 100, finger_pos=FINGER_CLOSED, realtime=True)
+
+    # hold at top to show success
+    for _ in range(200):
+        p.setJointMotorControl2(robot, 9,  p.POSITION_CONTROL,
+                                targetPosition=FINGER_CLOSED, force=FINGER_FORCE)
+        p.setJointMotorControl2(robot, 10, p.POSITION_CONTROL,
+                                targetPosition=FINGER_CLOSED, force=FINGER_FORCE)
+        p.stepSimulation()
+        time.sleep(1 / 240)
+
+    if constraint_id is not None:
+        p.removeConstraint(constraint_id)
 
 
 def main(args):
@@ -83,6 +169,17 @@ def main(args):
     except FileNotFoundError:
         print("No path.")
         return
+
+    # load grasps for the target object
+    obj_info = scene_data["object_models"][target_object_name]
+    grasp_data = load_grasps(target_object_name, obj_info["scale"])
+    world_grasps = None
+    if grasp_data:
+        world_grasps = grasps_to_world(
+            grasp_data,
+            obj_info["position"],
+            obj_info.get("orientation", [0, 0, 0]),
+        )
 
     scene = Scene(scene_data=scene_data, name=args.scene)
     scene.start_physics_client(gui=True)

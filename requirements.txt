@@ -1,6 +1,11 @@
 matplotlib
 numpy
 openai
+Pillow
+plotly
 pybullet
 scipy
 tqdm
+transformers
+trimesh
+accelerate

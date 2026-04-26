@@ -1,12 +1,17 @@
-import base64
-import io
+import re
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 from tqdm import tqdm
 import ast
-from openai import OpenAI
+import torch
+from transformers import AutoProcessor, AutoModelForCausalLM
+
+
+GEMMA_MODEL_ID = "google/gemma-4-E4B-it"
+_GEMMA_PROCESSOR = None
+_GEMMA_MODEL = None
 
 
 class CostMap:
@@ -237,43 +242,67 @@ def fetch_cost_dict_bypass(image_set):
 
 
 def fetch_cost_dict(image_set):
-    model = "gpt-4o" 
-    buffered = io.BytesIO()
-    image_set.annotated_image.save(buffered, format="PNG")
-    img_bytes = buffered.getvalue()
-    base64_image = base64.b64encode(img_bytes).decode("utf-8")
+    global _GEMMA_PROCESSOR, _GEMMA_MODEL
+
+    if _GEMMA_PROCESSOR is None or _GEMMA_MODEL is None:
+        _GEMMA_PROCESSOR = AutoProcessor.from_pretrained(GEMMA_MODEL_ID)
+        _GEMMA_MODEL = AutoModelForCausalLM.from_pretrained(
+            GEMMA_MODEL_ID,
+            dtype=torch.bfloat16,
+            device_map="cuda:0",
+        )
 
     prompt = create_prompt(image_set)
 
-    payload = { 
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{base64_image}"
-                        },
-                    },
-                ],
-            }
-        ],
-        "max_tokens": 800,
-    }
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "image", "image": image_set.annotated_image},
+                {"type": "text", "text": prompt},
+            ],
+        }
+    ]
 
-    client = OpenAI()   
+    text = _GEMMA_PROCESSOR.apply_chat_template(
+        messages,
+        tokenize=False,
+        add_generation_prompt=True,
+        enable_thinking=False,
+    )
+    inputs = _GEMMA_PROCESSOR(
+        text=text,
+        images=image_set.annotated_image,
+        return_tensors="pt",
+    ).to(_GEMMA_MODEL.device)
+    input_len = inputs["input_ids"].shape[-1]
 
-    completion = client.chat.completions.create(model=model, messages=payload["messages"])
+    outputs = _GEMMA_MODEL.generate(
+        **inputs,
+        max_new_tokens=512,
+        do_sample=False,
+    )
+    response = _GEMMA_PROCESSOR.decode(outputs[0][input_len:], skip_special_tokens=False)
 
-    content = completion.choices[0].message.content
-    print(f"{model} Output: {content}")
-
-    content_dict = ast.literal_eval(content)
     try:
-        cost_dict = {int(i): cost for i, cost in content_dict.items()}
-    except:
-        cost_dict = {int(i[1:-1]): cost for i, cost in content_dict.items()}
+        parsed = _GEMMA_PROCESSOR.parse_response(response)
+        if isinstance(parsed, dict):
+            content = parsed.get("content", parsed.get("text", str(parsed)))
+        else:
+            content = parsed if isinstance(parsed, str) else str(parsed)
+    except Exception:
+        content = response
+
+    match = re.search(r"\{.*\}", content, re.DOTALL)
+    if not match:
+        raise ValueError(f"Gemma output did not contain a JSON object: {content}")
+
+    content_dict = ast.literal_eval(match.group(0))
+    try:
+        cost_dict = {int(i): int(cost) for i, cost in content_dict.items()}
+    except Exception:
+        cost_dict = {int(i[1:-1]): int(cost) for i, cost in content_dict.items()}
+
+    cost_dict = {i: max(0, min(10, c)) for i, c in cost_dict.items()}
     return cost_dict
     

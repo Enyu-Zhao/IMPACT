@@ -15,11 +15,11 @@ def compute_oriented_gripper(yaw_deg):
 
 
 def ik_pose_xyz(robot, ee_link_index, xyz, rest):
-    q = p.calculateInverseKinematics(robot, ee_link_index, xyz, 
+    q = p.calculateInverseKinematics(robot, ee_link_index, xyz,
         lowerLimits=[-2.8973,-1.7628,-2.8973,-3.0718,-2.8973, 0.0,-2.8973],
         upperLimits=[ 2.8973, 1.7628, 2.8973,-0.0698, 2.8973, 3.7525, 2.8973],
         restPoses=rest, maxNumIterations=300, residualThreshold=1e-4)
-    return np.array(q[:7])  
+    return np.array(q[:7])
 
 
 def ik_pose_xyz_yaw(robot, ee_link_index, xyz, yaw_deg, rest):
@@ -92,7 +92,7 @@ def evaluate_path(path, robot, obstacles, ee_link_index, scene, contact_index=[9
         reach_target_time += step_time
 
         contact_points = p.getContactPoints(bodyA=robot, bodyB=scene.target_id)
-        ee_contacts = [contact for contact in contact_points if contact[3] in contact_index] # left finger, right finger of franka panda
+        ee_contacts = [contact for contact in contact_points if contact[3] in contact_index]
         if ee_contacts:
             target_reached = True
             break

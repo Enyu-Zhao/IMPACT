@@ -1,3 +1,4 @@
+import os
 import pybullet as p
 import pybullet_data
 import json
@@ -88,7 +89,7 @@ class Scene:
     def load_robot(self):
         robot_base_location = [0.6, 0, 0]
         robot = p.loadURDF("franka_panda/panda.urdf", robot_base_location, p.getQuaternionFromEuler([0, 0, np.pi]), useFixedBase=True)
-        ee_link_index = 11 
+        ee_link_index = 11
         self.initial_joint_positions = [0.05, -1.15, -0.13, -3.06, -0.05, 2.05, -2.35]
         for i in range(len(self.initial_joint_positions)):
             p.resetJointState(robot, i, self.initial_joint_positions[i])

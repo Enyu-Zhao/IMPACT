@@ -1,0 +1,45 @@
+collision_spheres:
+    lbr_link_0:
+        - "center": [0.0, 0.0, 0.12]
+          "radius": 0.11
+    lbr_link_1:
+        - "center": [0.0, -0.04, 0.2]
+          "radius": 0.08
+    lbr_link_2:
+        - "center": [0.0, 0.07, 0.0]
+          "radius": 0.075
+    lbr_link_3:
+        - "center": [0.0, 0.0, 0.0]
+          "radius": 0.08
+        - "center": [0.0, 0.045, 0.18]
+          "radius": 0.07
+    lbr_link_4:
+        - "center": [0.0, -0.06, 0.01]
+          "radius": 0.07
+    lbr_link_5:
+        - "center": [0.0, 0.0, 0.0]
+          "radius": 0.07
+    lbr_link_6:
+        - "center": [0.0, 0.03, 0.0]
+          "radius": 0.055
+        - "center": [0.0, 0.08, -0.02]
+          "radius": 0.06
+    lbr_link_7:
+        - "center": [0.0, 0.0, 0.01]
+          "radius": 0.04
+    robotiq_to_lbr_mount: 
+        - "center": [0.0, 0.0, 0.03]
+          "radius": 0.035
+    robotiq_link: 
+        - "center": [0.06, 0.0, 0.08]
+          "radius": 0.015
+        - "center": [-0.06, 0.0, 0.08]
+          "radius": 0.015
+        - "center": [0.08, 0.0, 0.15]
+          "radius": 0.01
+        - "center": [-0.08, 0.0, 0.15]
+          "radius": 0.01
+        - "center": [0.07, 0.0, 0.2]
+          "radius": 0.005
+        - "center": [-0.07, 0.0, 0.2]
+          "radius": 0.005

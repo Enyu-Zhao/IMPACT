@@ -1,0 +1,57 @@
+##
+## Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+##
+## NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+## property and proprietary rights in and to this material, related
+## documentation and any modifications thereto. Any use, reproduction,
+## disclosure or distribution of this material and related documentation
+## without an express license agreement from NVIDIA CORPORATION or
+## its affiliates is strictly prohibited.
+##
+
+# this is the old config hard coded with table, back wall, left side to prevent hitting the other arm, and front wall to prevent hitting the camera
+# cuboid:
+#  robot_table:
+#    dims: [2, 2, 1.] # x, y, z
+#    pose: [0.0, 0.0, -0.5, 1., 0., 0., 0.] # x, y, z, qw, qx, qy, qz
+#  wall_back:
+#    dims: [1., 4., 4.]
+#    pose: [2., 0.0, 0., 1., 0., 0., 0.]
+#  wall_left_iiwa:
+#    dims: [4, 1, 4]
+#    pose: [0, -0.95, 0, 1., 0, 0, 0]
+# wall_front:
+#    dims: [1., 4., 4.]
+#    pose: [-1.4, 0.0, 0., 1., 0., 0., 0.]
+
+
+# This is the new config with the camera in back:
+# All measurements are done in inches and converted to meters via the 1 inch = 0.0254 m conversion ratio
+
+cuboid:
+  # each table is 24 inches by 36 inches surface, at 23 9/16 inches tall, so 0.61m by 0.9144m, with 0.5984875 m height
+  # for simplicity we combining the table the robot is on, the table the robot next to it is on, and the table in front of the robot (plus a ficticious table in front of the other robot)
+  # into one, assuming 48 inches by 72 inches surface, and the robot positioned at the center of the back, right quadrant
+  robot_table:
+    dims: [1.2192, 1.8288, 0.5984875] # x, y, z
+    pose: [-0.3048, -0.4572, -0.29924375, 1., 0., 0., 0.] # x, y, z, qw, qx, qy, qz
+  
+  # the back wall is around 50 inches away, which converts to 1.27m, but because the camera is now set up there too, we assume 1m for some buffer
+  wall_back:
+    dims: [1., 4., 4.]
+    pose: [1.5, 0.0, 0., 1., 0., 0., 0.]
+
+  # instead of a wall, we model the robot as it is
+  # approximately 10' by 10' by 60' so thats 0.254m by 0.254m by 1.524m, and we position it at the center of the other table, also 24' by 48'
+  # so two robot's center distance is 36 inches, which is 0.9144m
+  # buffering the robot by 10 inch on each side because robotiq gripper itself is around 10 inches
+  # and the planner seem to not know about the gripper
+  #other_iiwa:
+  #  dims: [0.762, 0.762, 1.524]
+  #  pose: [0, -0.9144, 0.762, 1., 0, 0, 0]
+  # too scary, putting the plane back in
+  other_iiwa:
+    dims: [4, 1, 4]
+    pose: [1.6, -0.95, 0, 1., 0, 0, 0]
+
+  #since camera is no longer in the front, wall_front is removed
